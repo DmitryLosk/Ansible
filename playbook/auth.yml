@@ -1,0 +1,38 @@
+---
+- name: Создание пользователя и установка SSH key
+  hosts: vm1
+  vars:
+    username: ansible    
+    id_path: /home/{{ username }}/.ssh/id_rsa.pub
+  tasks:
+
+    - name: Создание пользователя
+      user:
+        name: "{{ username }}"
+        state: present
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Создание директории .ssh
+      file:
+        path: "/home/{{ username }}/.ssh"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: '0700'
+
+    - name: Создание SSH key
+      user:
+        name: "{{ username }}"
+        generate_ssh_key: yes
+      become: yes
+
+    - name: Публичный ключ > authorized_key
+      authorized_key:
+        user: "{{ username }}"        
+        state: present
+        key: "{{ lookup('file', '/home/{{ username }}/.ssh/id_rsa.pub') }}"
+      with_items:
+        - vm2
+        - vm3
+      become: yes    

@@ -1,0 +1,13 @@
+[app]
+vm2
+vm3
+
+[database]
+vm1
+
+[web]
+vm1
+
+[all:vars]
+postgresql_version=15
+postgresql_data=/var/lib/postgresql/data

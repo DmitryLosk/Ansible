@@ -1,0 +1,17 @@
+
+---
+- name: Verify Docker installation
+
+  hosts: all
+  tasks:
+  - name: Check if Docker is installed
+    command: docker --version
+    register: result
+    failed_when: result.rc != 0
+    changed_when: false
+
+  - name: Check if PostgreSQL is installed
+    command: psql --version
+    register: result
+    failed_when: result.rc != 0
+    changed_when: false

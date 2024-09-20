@@ -1,0 +1,248 @@
+---
+- name: Установка и запуск Docker
+  hosts: app
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Обновление пакетов
+      apt:
+        update_cache: yes
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Список файлов
+      find:
+        paths: /etc/yum.repos.d/
+        patterns: 'CentOS-*'
+      register: cat
+
+    - name: Вывод
+      debug:
+        var: cat.stdout_lines
+
+#    - name: Замена репы
+#      lineinfile:
+#        path: "{{ item.path }}"
+#        regexp: '^mirrorlist'
+#        line: '#mirrorlist'
+#        state: present
+#      loop: "{{ cat.files }}"
+#      when:
+#        ansible_os_family == "RedHat"  
+
+#    - name: Настройка репозитория
+#      lineinfile:
+#        path: "{{ item.path }}"
+#        regexp: '^#baseurl=http://mirror.centos.org'
+#        line: 'baseurl=http://vault.centos.org'
+#        state: present
+#      loop: "{{ cat.files }}"
+#      when:
+#        ansible_os_family == "RedHat"
+    
+    - name: Обновление системы
+      ansible.builtin.yum:
+        name: '*'
+        state: latest        
+      when:
+        ansible_os_family == "RedHat"
+ 
+    - name: yum-utils
+      yum:
+        name:
+          - yum-utils
+          - lvm2
+        state: present
+      when:
+        ansible_os_family == "RedHat"
+
+    - name: Docker репозиторий
+      command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        warn: false
+      when:
+        ansible_os_family == "RedHat"
+
+    - name: Установка необходимых пакетов
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Установка необходимых пакетов CentOS
+      yum:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      when:
+        ansible_os_family == "RedHat"
+        
+    - name: Добавление mode
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      when:
+        ansible_os_family == "Debian"
+   
+    - name: GPG ключ Docker
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Добавление mode
+      file:
+        path: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Добавление репозитория Docker
+      lineinfile:
+        path: /etc/apt/sources.list.d/docker.list
+        line: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu focal stable"
+        create: yes
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Обновление пакетов
+      apt:
+        update_cache: yes
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Установка Docker
+      apt:
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Запуск и включение Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Запуск сервиса Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      when:
+        ansible_os_family == "RedHat"      
+
+    - name: Проверка версии Docker
+      command: docker --version
+      register: docker_version
+
+    - name: Вывод версии Docker
+      debug:
+        var: docker_version.stdout
+
+- name: Установка и запуск PostgreSQL
+  hosts: database
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Обновление пакетов
+      apt:
+        update_cache: yes
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Установка необходимых пакетов
+      apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+      when:
+        ansible_os_family == "Debian"
+
+    - name: For common files
+      file:
+        path: /usr/share/postgresql-common/pgdg
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+        
+    - name: postgresql ключ 
+      get_url:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        dest: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+        mode: '0644'
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Добавление репозитория PostgreSQL
+      lineinfile:
+        path: /etc/apt/sources.list.d/pgdg.list
+        line: "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt focal-pgdg main"
+        create: yes
+      when:
+        ansible_os_family == "Debian"
+ 
+    - name: Обновление репозитория
+      apt:
+        update_cache: yes
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Установка PostgreSQL
+      apt:
+        name: "postgresql-{{ postgresql_version }}"
+        state: present
+      when:
+        ansible_os_family == "Debian"
+
+    - name: Проверяем каталог
+      file:
+        path: "{{ postgresql_data }}"
+        state: directory
+        owner: postgres
+        group: postgres
+
+    - name: Настройка data
+      lineinfile:
+        path: /etc/postgresql/{{ postgresql_version }}/main/postgresql.conf
+        regexp: '^data_directory ='
+        line: "data_directory = '{{ postgresql_data }}'"
+        state: present
+
+    - name: Остановка PostgreSQL
+      service:
+        name: postgresql
+        state: stopped
+
+    - name: Копируем Data при смене каталога
+      command: "cp -r /var/lib/postgresql/{{ postgresql_version }}/main {{ postgresql_data }}/"
+      args:
+        creates: "{{ postgresql_data }}/PG_VERSION"
+
+    - name: Запуск PostgreSQL
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
